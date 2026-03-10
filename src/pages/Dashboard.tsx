@@ -41,13 +41,18 @@ export default function Dashboard() {
     e.preventDefault();
     try {
       const { data, error } = await supabase.from('projects').insert([newProject]).select();
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase Insert Error:', error);
+        alert(`Failed to save to database: ${error.message}. Make sure your RLS policies allow inserts.`);
+        throw error;
+      }
       
       if (data) {
         setProjects([data[0], ...projects]);
       }
     } catch (err) {
       console.error('Error adding project:', err);
+      // Fallback to local state so the UI still feels responsive, but warn the user
       const project = { ...newProject, id: Math.random().toString(36).substr(2, 9) };
       setProjects([project, ...projects]);
     } finally {
@@ -59,12 +64,14 @@ export default function Dashboard() {
   const handleUpdateProject = async (id: string, updates: any) => {
     try {
       const { error } = await supabase.from('projects').update(updates).eq('id', id);
-      if (error) throw error;
+      if (error) {
+        alert(`Update failed: ${error.message}`);
+        throw error;
+      }
       setProjects(projects.map(p => p.id === id ? { ...p, ...updates } : p));
       setEditingId(null);
     } catch (err) {
       console.error('Error updating project:', err);
-      setProjects(projects.map(p => p.id === id ? { ...p, ...updates } : p));
       setEditingId(null);
     }
   };
@@ -73,11 +80,13 @@ export default function Dashboard() {
     if (!confirm('Are you sure you want to delete this project?')) return;
     try {
       const { error } = await supabase.from('projects').delete().eq('id', id);
-      if (error) throw error;
+      if (error) {
+        alert(`Delete failed: ${error.message}`);
+        throw error;
+      }
       setProjects(projects.filter(p => p.id !== id));
     } catch (err) {
       console.error('Error deleting project:', err);
-      setProjects(projects.filter(p => p.id !== id));
     }
   };
 
