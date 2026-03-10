@@ -1,10 +1,11 @@
 import React from 'react';
-import { MOCK_FINANCIALS } from '../lib/supabase';
+import { supabase, MOCK_FINANCIALS } from '../lib/supabase';
 import Modal from '../components/Modal';
 import { IndianRupee, TrendingDown, DollarSign, Plus } from 'lucide-react';
 
 export default function BusinessCaseModule() {
-  const [financials, setFinancials] = React.useState(MOCK_FINANCIALS);
+  const [financials, setFinancials] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [newItem, setNewItem] = React.useState({
     category: 'Tooling',
@@ -12,21 +13,64 @@ export default function BusinessCaseModule() {
     cost: ''
   });
 
-  const handleAddItem = (e: React.FormEvent) => {
+  const fetchFinancials = async () => {
+    try {
+      const { data, error } = await supabase.from('financials').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setFinancials(data);
+      } else {
+        setFinancials(MOCK_FINANCIALS);
+      }
+    } catch (err) {
+      console.error('Error fetching financials:', err);
+      setFinancials(MOCK_FINANCIALS);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchFinancials();
+  }, []);
+
+  const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    const item = {
-      ...newItem,
-      id: Math.random().toString(36).substr(2, 9),
-      cost: Number(newItem.cost)
-    };
-    const updatedFinancials = [...financials, item];
-    setFinancials(updatedFinancials);
-    MOCK_FINANCIALS.push(item);
-    setIsModalOpen(false);
-    setNewItem({ category: 'Tooling', item: '', cost: '' });
+    try {
+      const payload = {
+        ...newItem,
+        cost: Number(newItem.cost)
+      };
+      const { data, error } = await supabase.from('financials').insert([payload]).select();
+      if (error) throw error;
+      
+      if (data) {
+        setFinancials([data[0], ...financials]);
+      }
+    } catch (err) {
+      console.error('Error adding financial item:', err);
+      const item = {
+        ...newItem,
+        id: Math.random().toString(36).substr(2, 9),
+        cost: Number(newItem.cost)
+      };
+      setFinancials([item, ...financials]);
+      MOCK_FINANCIALS.push(item);
+    } finally {
+      setIsModalOpen(false);
+      setNewItem({ category: 'Tooling', item: '', cost: '' });
+    }
   };
 
   const totalCost = financials.reduce((acc, curr) => acc + Number(curr.cost), 0);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

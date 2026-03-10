@@ -1,12 +1,13 @@
 import React from 'react';
-import { MOCK_PROJECTS } from '../lib/supabase';
+import { supabase, MOCK_PROJECTS } from '../lib/supabase';
 import ProjectGates from '../components/ProjectGates';
 import Modal from '../components/Modal';
 import { ArrowRight, Clock, Target, TrendingUp, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
-  const [projects, setProjects] = React.useState(MOCK_PROJECTS);
+  const [projects, setProjects] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [newProject, setNewProject] = React.useState({
     name: '',
@@ -16,23 +17,62 @@ export default function Dashboard() {
     current_gate: 'G0'
   });
 
-  const handleAddProject = (e: React.FormEvent) => {
+  const fetchProjects = async () => {
+    try {
+      const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setProjects(data);
+      } else {
+        setProjects(MOCK_PROJECTS);
+      }
+    } catch (err) {
+      console.error('Error fetching projects:', err);
+      setProjects(MOCK_PROJECTS);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const handleAddProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    const project = {
-      ...newProject,
-      id: Math.random().toString(36).substr(2, 9),
-    };
-    const updatedProjects = [...projects, project];
-    setProjects(updatedProjects);
-    // Update global mock for persistence during session
-    MOCK_PROJECTS.push(project);
-    setIsModalOpen(false);
-    setNewProject({ name: '', description: '', status: 'Ongoing', progress: 0, current_gate: 'G0' });
+    try {
+      const { data, error } = await supabase.from('projects').insert([newProject]).select();
+      if (error) throw error;
+      
+      if (data) {
+        setProjects([data[0], ...projects]);
+      }
+    } catch (err) {
+      console.error('Error adding project:', err);
+      // Fallback for demo
+      const project = {
+        ...newProject,
+        id: Math.random().toString(36).substr(2, 9),
+      };
+      setProjects([project, ...projects]);
+      MOCK_PROJECTS.push(project);
+    } finally {
+      setIsModalOpen(false);
+      setNewProject({ name: '', description: '', status: 'Ongoing', progress: 0, current_gate: 'G0' });
+    }
   };
 
   const ongoingProjects = projects.filter(p => p.status === 'Ongoing');
   const upcomingProjects = projects.filter(p => p.status === 'Upcoming');
   const mainProject = projects[0];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -55,7 +95,7 @@ export default function Dashboard() {
         {[
           { label: 'Active Projects', value: ongoingProjects.length.toString(), icon: Target, color: 'text-blue-600', bg: 'bg-blue-50' },
           { label: 'Upcoming Gates', value: '4', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-          { label: 'Avg. Progress', value: `${Math.round(projects.reduce((a, b) => a + b.progress, 0) / projects.length)}%`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Avg. Progress', value: projects.length > 0 ? `${Math.round(projects.reduce((a, b) => a + (b.progress || 0), 0) / projects.length)}%` : '0%', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
           { label: 'Team Members', value: '86', icon: Target, color: 'text-purple-600', bg: 'bg-purple-50' },
         ].map((stat, i) => (
           <div key={i} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">

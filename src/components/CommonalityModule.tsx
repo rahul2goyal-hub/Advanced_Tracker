@@ -1,27 +1,59 @@
 import React from 'react';
-import { MOCK_COMPONENTS } from '../lib/supabase';
+import { supabase, MOCK_COMPONENTS } from '../lib/supabase';
 import Modal from '../components/Modal';
 import { Box, RefreshCcw, PlusCircle, CheckCircle2, Plus } from 'lucide-react';
 
 export default function CommonalityModule() {
-  const [components, setComponents] = React.useState(MOCK_COMPONENTS);
+  const [components, setComponents] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [newComponent, setNewComponent] = React.useState({
     name: '',
     status: 'Common'
   });
 
-  const handleAddComponent = (e: React.FormEvent) => {
+  const fetchComponents = async () => {
+    try {
+      const { data, error } = await supabase.from('components').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setComponents(data);
+      } else {
+        setComponents(MOCK_COMPONENTS);
+      }
+    } catch (err) {
+      console.error('Error fetching components:', err);
+      setComponents(MOCK_COMPONENTS);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchComponents();
+  }, []);
+
+  const handleAddComponent = async (e: React.FormEvent) => {
     e.preventDefault();
-    const component = {
-      ...newComponent,
-      id: Math.random().toString(36).substr(2, 9),
-    };
-    const updatedComponents = [...components, component];
-    setComponents(updatedComponents);
-    MOCK_COMPONENTS.push(component);
-    setIsModalOpen(false);
-    setNewComponent({ name: '', status: 'Common' });
+    try {
+      const { data, error } = await supabase.from('components').insert([newComponent]).select();
+      if (error) throw error;
+      
+      if (data) {
+        setComponents([data[0], ...components]);
+      }
+    } catch (err) {
+      console.error('Error adding component:', err);
+      const component = {
+        ...newComponent,
+        id: Math.random().toString(36).substr(2, 9),
+      };
+      setComponents([component, ...components]);
+      MOCK_COMPONENTS.push(component);
+    } finally {
+      setIsModalOpen(false);
+      setNewComponent({ name: '', status: 'Common' });
+    }
   };
 
   const stats = {
@@ -29,6 +61,14 @@ export default function CommonalityModule() {
     modified: components.filter(c => c.status === 'Modified').length,
     new: components.filter(c => c.status === 'New').length,
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

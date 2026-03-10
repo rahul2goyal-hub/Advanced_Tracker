@@ -1,10 +1,11 @@
 import React from 'react';
-import { MOCK_MEMBERS } from '../lib/supabase';
+import { supabase, MOCK_MEMBERS } from '../lib/supabase';
 import Modal from '../components/Modal';
 import { UserPlus, Mail, Shield, Building2 } from 'lucide-react';
 
 export default function TeamModule() {
-  const [members, setMembers] = React.useState(MOCK_MEMBERS);
+  const [members, setMembers] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [newMember, setNewMember] = React.useState({
     name: '',
@@ -12,18 +13,57 @@ export default function TeamModule() {
     department: 'MLH'
   });
 
-  const handleAddMember = (e: React.FormEvent) => {
-    e.preventDefault();
-    const member = {
-      ...newMember,
-      id: Math.random().toString(36).substr(2, 9),
-    };
-    const updatedMembers = [...members, member];
-    setMembers(updatedMembers);
-    MOCK_MEMBERS.push(member);
-    setIsModalOpen(false);
-    setNewMember({ name: '', role: '', department: 'MLH' });
+  const fetchMembers = async () => {
+    try {
+      const { data, error } = await supabase.from('members').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setMembers(data);
+      } else {
+        setMembers(MOCK_MEMBERS);
+      }
+    } catch (err) {
+      console.error('Error fetching members:', err);
+      setMembers(MOCK_MEMBERS);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  React.useEffect(() => {
+    fetchMembers();
+  }, []);
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { data, error } = await supabase.from('members').insert([newMember]).select();
+      if (error) throw error;
+      
+      if (data) {
+        setMembers([data[0], ...members]);
+      }
+    } catch (err) {
+      console.error('Error adding member:', err);
+      const member = {
+        ...newMember,
+        id: Math.random().toString(36).substr(2, 9),
+      };
+      setMembers([member, ...members]);
+      MOCK_MEMBERS.push(member);
+    } finally {
+      setIsModalOpen(false);
+      setNewMember({ name: '', role: '', department: 'MLH' });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -46,10 +86,10 @@ export default function TeamModule() {
           <div key={member.id} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-4">
               <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-red-600 font-bold text-lg">
-                {member.name.split(' ').map(n => n[0]).join('')}
+                {member.name.split(' ').map((n: string) => n[0]).join('')}
               </div>
               <span className="px-2 py-1 rounded-lg bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wider">
-                ID: {member.id}
+                ID: {member.id.toString().slice(0, 8)}
               </span>
             </div>
             

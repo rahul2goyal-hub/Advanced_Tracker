@@ -1,11 +1,12 @@
 import React from 'react';
-import { MOCK_ACTIVITIES } from '../lib/supabase';
+import { supabase, MOCK_ACTIVITIES } from '../lib/supabase';
 import Modal from '../components/Modal';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
 export default function ScheduleModule() {
-  const [activities, setActivities] = React.useState(MOCK_ACTIVITIES);
+  const [activities, setActivities] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [newActivity, setNewActivity] = React.useState({
     name: '',
@@ -14,23 +15,62 @@ export default function ScheduleModule() {
     status: 'Pending'
   });
 
-  const handleAddActivity = (e: React.FormEvent) => {
-    e.preventDefault();
-    const activity = {
-      ...newActivity,
-      id: Math.random().toString(36).substr(2, 9),
-    };
-    const updatedActivities = [...activities, activity];
-    setActivities(updatedActivities);
-    MOCK_ACTIVITIES.push(activity);
-    setIsModalOpen(false);
-    setNewActivity({ 
-      name: '', 
-      start_date: format(new Date(), 'yyyy-MM-dd'), 
-      end_date: format(new Date(), 'yyyy-MM-dd'), 
-      status: 'Pending' 
-    });
+  const fetchActivities = async () => {
+    try {
+      const { data, error } = await supabase.from('activities').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setActivities(data);
+      } else {
+        setActivities(MOCK_ACTIVITIES);
+      }
+    } catch (err) {
+      console.error('Error fetching activities:', err);
+      setActivities(MOCK_ACTIVITIES);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  React.useEffect(() => {
+    fetchActivities();
+  }, []);
+
+  const handleAddActivity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { data, error } = await supabase.from('activities').insert([newActivity]).select();
+      if (error) throw error;
+      
+      if (data) {
+        setActivities([data[0], ...activities]);
+      }
+    } catch (err) {
+      console.error('Error adding activity:', err);
+      const activity = {
+        ...newActivity,
+        id: Math.random().toString(36).substr(2, 9),
+      };
+      setActivities([activity, ...activities]);
+      MOCK_ACTIVITIES.push(activity);
+    } finally {
+      setIsModalOpen(false);
+      setNewActivity({ 
+        name: '', 
+        start_date: format(new Date(), 'yyyy-MM-dd'), 
+        end_date: format(new Date(), 'yyyy-MM-dd'), 
+        status: 'Pending' 
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
